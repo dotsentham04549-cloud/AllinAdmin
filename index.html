@@ -476,6 +476,7 @@ function viewShift(){
     </div>
   </div>
 
+  ${deferredPrompt&&!standalone()?`<button class="btn" style="margin-top:14px" onclick="doInstall()">Установить приложение</button>`:''}
   <div class="qrow">
     <input id="qi" placeholder="Быстро: «завтра позвонить Сергею»" onkeydown="if(event.key==='Enter')quickAdd()">
     <button class="qb" onclick="quickAdd()">+</button>
@@ -707,6 +708,8 @@ $('#btnMenu').addEventListener('click',()=>{
     <div class="f"><textarea id="mList" style="min-height:120px">${esc(DB.masters.join('\n'))}</textarea>
       <div class="sm mut" style="margin-top:6px">По одному в строке</div></div>
     <button class="btn ghost sm" onclick="saveMasters()">Сохранить список</button>
+    <div class="sect"><h2>Проверка установки</h2></div>
+    <div class="card"><div id="diag" class="sm">Проверяю…</div></div>
     <div class="sect"><h2>Резервная копия</h2></div>
     <button class="btn ghost" onclick="expJSON()">Скачать все данные</button>
     <div style="height:10px"></div>
@@ -714,7 +717,28 @@ $('#btnMenu').addEventListener('click',()=>{
     <input type="file" accept="application/json" id="impF" onchange="impJSON(event)">
     <div class="sm mut" style="margin-top:10px">Данные хранятся в твоём аккаунте Claude и открываются одинаково на телефоне и на компьютере. Копию делай раз в неделю.</div>
     <div style="height:20px"></div>`);
+  runDiag();
 });
+async function runDiag(){
+  const el=document.getElementById('diag');if(!el)return;
+  const line=(ok,t)=>`<div style="padding:4px 0;color:${ok?'var(--green)':'var(--red)'}">${ok?'✓':'✕'} <span style="color:var(--text)">${t}</span></div>`;
+  let out='';
+  out+=line(location.protocol==='https:','Адрес по https');
+  let sw=false,ctrl=false;
+  if('serviceWorker' in navigator){
+    try{const r=await navigator.serviceWorker.getRegistration();sw=!!r;ctrl=!!navigator.serviceWorker.controller}catch(e){}
+  }
+  out+=line(sw,'Офлайн-модуль зарегистрирован');
+  out+=line(ctrl,'Офлайн-модуль управляет страницей');
+  let man=false,ico=false;
+  try{const r=await fetch('manifest.json',{cache:'no-store'});man=r.ok;if(man){const j=await r.json();const i=await fetch(j.icons[0].src,{cache:'no-store'});ico=i.ok}}catch(e){}
+  out+=line(man,'Манифест читается');
+  out+=line(ico,'Иконка загружается');
+  out+=line(standalone(),'Запущено как приложение');
+  out+=line(!!deferredPrompt||standalone(),'Chrome готов установить');
+  out+=`<div class="mut" style="margin-top:8px">Если всё зелёное, кроме последних двух — перезапусти вкладку. Если красный «офлайн-модуль» — файл sw.js лежит не рядом с index.html.</div>`;
+  el.innerHTML=out;
+}
 function saveMasters(){DB.masters=$('#mList').value.split('\n').map(s=>s.trim()).filter(Boolean);save();closeSheet();render()}
 function expJSON(){
   const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
@@ -873,8 +897,18 @@ $('#fab').addEventListener('click',()=>{
   orderForm();
 });
 
+let deferredPrompt=null, swReady=false;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;if(LOADED)render()});
+window.addEventListener('appinstalled',()=>{deferredPrompt=null;if(LOADED)render()});
+function doInstall(){
+  if(!deferredPrompt)return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.finally(()=>{deferredPrompt=null;render()});
+}
+const standalone=()=>window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
+
 if('serviceWorker' in navigator && location.protocol.indexOf('http')===0){
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
+  navigator.serviceWorker.register('sw.js').then(()=>{swReady=true}).catch(()=>{});
 }
 (async()=>{await load();render();})();
 </script>
