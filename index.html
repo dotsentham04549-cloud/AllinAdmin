@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ALL IN">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" href="icon-192.png">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
@@ -29,7 +29,7 @@
   --safe:env(safe-area-inset-bottom,0px);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{background:var(--ink);color:var(--text)}
+html,body{background:var(--ink);color:var(--text);overflow-x:hidden;max-width:100%}
 body{
   font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:15px;line-height:1.45;
   padding-bottom:calc(74px + var(--safe));min-height:100vh;
@@ -105,13 +105,22 @@ header{position:sticky;top:0;z-index:40;background:rgba(15,18,22,.92);backdrop-f
 /* ---------- forms ---------- */
 label{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 5px}
 input,select,textarea{
-  width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);
+  width:100%;max-width:100%;min-width:0;background:var(--panel2);border:1px solid var(--line);color:var(--text);
   border-radius:9px;padding:11px 12px;font-family:inherit;font-size:16px;outline:none
 }
+input[type=date],input[type=time]{-webkit-appearance:none;appearance:none;min-height:46px}
 input:focus,select:focus,textarea:focus{border-color:var(--amber)}
 textarea{resize:vertical;min-height:64px;font-size:15px}
 .f{margin-bottom:13px}
-.f2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.f2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.row>*{min-width:0}
+.gauge .v{font-size:clamp(18px,5.4vw,26px)}
+.gauge .k{font-size:clamp(9px,2.5vw,10.5px);overflow-wrap:anywhere}
+.job .sum{font-size:clamp(14px,4vw,16px)}
+.job .car{font-size:clamp(14px,4.2vw,16px)}
+.kv b{overflow-wrap:anywhere}
+.tag{white-space:nowrap}
+.task .num{white-space:nowrap}
 .btn{
   display:block;width:100%;padding:13px;border:0;border-radius:10px;background:var(--amber);color:#141414;
   font-family:'Oswald';font-weight:600;font-size:15px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer
@@ -533,7 +542,7 @@ function viewCash(){
     if(p.date>=from&&p.date<=to){
       total+=p.sum;
       if(p.method==='Наличные')cash+=p.sum;else if(p.method==='Карта')card+=p.sum;else tr+=p.sum;
-      rows.push({date:p.date,sum:p.sum,method:p.method,what:o.car||o.name||'Заказ'});
+      rows.push({date:p.date,sum:p.sum,method:p.method,what:o.car||o.name||'Заказ',oid:o.id,pi:(o.pay||[]).indexOf(p),moved:!!p.moved});
     }
   }));
   const exps=DB.expenses.filter(e=>e.date>=from&&e.date<=to);
@@ -541,8 +550,10 @@ function viewCash(){
   DB.income.filter(i=>i.date>=from&&i.date<=to).forEach(i=>{
     const s=Number(i.sum)||0;total+=s;
     if(i.method==='Наличные')cash+=s;else if(i.method==='Карта')card+=s;else tr+=s;
-    rows.push({date:i.date,sum:s,method:i.method,what:i.what,id:i.id,manual:true});
+    rows.push({date:i.date,sum:s,method:i.method,what:i.what,id:i.id,manual:true,moved:!!i.moved});
   });
+  const leftIn=rows.filter(r=>!r.moved), leftEx=exps.filter(e=>!e.moved);
+  const leftSum=leftIn.reduce((s,r)=>s+r.sum,0)-leftEx.reduce((s,e)=>s+(Number(e.sum)||0),0);
   rows.sort((a,b)=>b.date.localeCompare(a.date));
   return `
   <div class="f2" style="margin-top:14px">
@@ -562,19 +573,40 @@ function viewCash(){
     <div class="kv"><span class="mut">Карта</span><b>${money(card)}</b></div>
     <div class="kv"><span class="mut">Перевод</span><b>${money(tr)}</b></div>
   </div>
+  <div class="card" style="margin-top:10px;border-color:${(leftIn.length+leftEx.length)?'rgba(245,165,36,.4)':'var(--line)'}">
+    <div class="row" style="align-items:center">
+      <div class="grow"><div class="xs">Не перенесено в таблицу</div>
+        <div class="sm mut" style="margin-top:3px">${leftIn.length+leftEx.length} строк${(leftIn.length+leftEx.length)?' · '+money(leftSum):''}</div></div>
+      ${(leftIn.length+leftEx.length)?`<button class="btn ghost sm" style="width:auto;padding:8px 12px" onclick="markAll('${from}','${to}')">Отметить всё</button>`:'<span class="tag ok">всё перенесено</span>'}
+    </div>
+  </div>
   <div class="sect"><h2>Расходы</h2><span class="act" onclick="expForm()">+ расход</span></div>
   <div class="list">${exps.length?exps.sort((a,b)=>b.date.localeCompare(a.date)).map(e=>`
-    <div class="task"><div class="grow"><div>${esc(e.what)}</div><div class="sm mut">${human(e.date)}</div></div>
-    <b class="num" style="color:var(--red)">−${num(e.sum)}</b>
-    <button class="icobtn" style="width:30px;height:30px;font-size:13px" onclick="delExp('${e.id}')">✕</button></div>`).join('')
+    <div class="task ${e.moved?'done':''}">
+      <div class="chk ${e.moved?'on':''}" onclick="markExp('${e.id}')">✓</div>
+      <div class="grow"><div class="tx">${esc(e.what)}</div><div class="sm mut">${human(e.date)}</div></div>
+      <b class="num" style="color:var(--red)">−${num(e.sum)}</b>
+      <button class="icobtn" style="width:30px;height:30px;font-size:13px" onclick="delExp('${e.id}')">✕</button></div>`).join('')
     :'<div class="empty"><b>Расходов нет</b>Химия, материалы, мойка — записывай сюда</div>'}</div>
   <div class="sect"><h2>Приход</h2><span class="act" onclick="incForm()">+ приход</span></div>
   <div class="list">${rows.length?rows.map(r=>`
-    <div class="task"><div class="grow"><div>${esc(r.what)}</div><div class="sm mut">${human(r.date)} · ${esc(r.method)}${r.manual?' · вручную':''}</div></div>
-    <b class="num" style="color:var(--green)">+${num(r.sum)}</b>
-    ${r.manual?`<button class="icobtn" style="width:30px;height:30px;font-size:13px" onclick="delInc('${r.id}')">✕</button>`:''}</div>`).join('')
+    <div class="task ${r.moved?'done':''}">
+      <div class="chk ${r.moved?'on':''}" onclick="${r.manual?`markInc('${r.id}')`:`markPay('${r.oid}',${r.pi})`}">✓</div>
+      <div class="grow"><div class="tx">${esc(r.what)}</div><div class="sm mut">${human(r.date)} · ${esc(r.method)}${r.manual?' · вручную':''}</div></div>
+      <b class="num" style="color:var(--green)">+${num(r.sum)}</b>
+      ${r.manual?`<button class="icobtn" style="width:30px;height:30px;font-size:13px" onclick="delInc('${r.id}')">✕</button>`:''}</div>`).join('')
     :'<div class="empty"><b>Приходов за период нет</b>Оплата заказа попадает сюда сама, когда жмёшь «Принять оплату». Всё остальное — сертификаты, доплаты, мелочь — кнопкой «+ приход»</div>'}</div>
   <div style="height:20px"></div>`;
+}
+function markPay(oid,i){const o=DB.orders.find(x=>x.id===oid);if(!o||!o.pay[i])return;o.pay[i].moved=!o.pay[i].moved;save();render()}
+function markInc(id){const i=DB.income.find(x=>x.id===id);if(i){i.moved=!i.moved;save();render()}}
+function markExp(id){const e=DB.expenses.find(x=>x.id===id);if(e){e.moved=!e.moved;save();render()}}
+function markAll(from,to){
+  if(!confirm('Отметить все строки за период как перенесённые в таблицу?'))return;
+  DB.orders.forEach(o=>(o.pay||[]).forEach(p=>{if(p.date>=from&&p.date<=to)p.moved=true}));
+  DB.income.forEach(i=>{if(i.date>=from&&i.date<=to)i.moved=true});
+  DB.expenses.forEach(e=>{if(e.date>=from&&e.date<=to)e.moved=true});
+  save();render();
 }
 function incForm(){
   openSheet(sheetHead('Приход')+`

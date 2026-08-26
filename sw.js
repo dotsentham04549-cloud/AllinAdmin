@@ -1,5 +1,5 @@
 /* ALL IN · офлайн-кэш */
-const CACHE = 'allin-v3';
+const CACHE = 'allin-v5';
 const CORE = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
