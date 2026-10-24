@@ -1,5 +1,5 @@
-/* ALL IN · офлайн-кэш v13 */
-const CACHE = 'allin-v13';
+/* ALL IN · офлайн-кэш v14 */
+const CACHE = 'allin-v14';
 const CORE = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', e => {
@@ -10,7 +10,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(ks => Promise.all(ks.filter(k => k !== CACHE && k.startsWith('allin-')).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
